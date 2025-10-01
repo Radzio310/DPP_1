@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # file: main.py
 def draw_mandelbrot(w=80, h=24, it=25):
     for y in range(h):
