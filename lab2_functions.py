@@ -1,3 +1,4 @@
+import math
 import re
 
 def is_palindrome(text: str) -> bool:
@@ -43,3 +44,11 @@ def word_frequencies(text: str) -> dict:
     for word in words:
         freq[word] = freq.get(word, 0) + 1
     return freq
+
+def is_prime(n: int) -> bool:
+    if(n<2):
+        return False
+    for i in range(2, int(math.sqrt(n)) + 1):
+        if(n % i == 0):
+            return False
+    return True
