@@ -1,30 +1,28 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+# api/ratings.py
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session as OrmSession
 from typing import List
-import csv
-import os
+from pydantic import BaseModel
+from api.db import Session as DBSession, Rating as RatingModel
 
 router = APIRouter()
 
-class Rating(BaseModel):
+class RatingOut(BaseModel):
     userId: int
     movieId: int
     rating: float
-    timestamp: int  # zmieniłem na int, bo w pliku jest liczba
+    timestamp: int
 
-def read_ratings():
-    ratings = []
-    csv_path = os.path.join(os.path.dirname(__file__), "data/ratings.csv")
-    with open(csv_path, encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            row["userId"] = int(row["userId"])
-            row["movieId"] = int(row["movieId"])
-            row["rating"] = float(row["rating"])
-            row["timestamp"] = int(row["timestamp"])
-            ratings.append(Rating(**row))
-    return ratings
+    class Config:
+        orm_mode = True
 
-@router.get("/ratings", response_model=List[Rating])
-def get_ratings():
-    return read_ratings()
+def get_db():
+    db = DBSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.get("/ratings", response_model=List[RatingOut])
+def get_ratings(db: OrmSession = Depends(get_db)):
+    return db.query(RatingModel).all()

@@ -1,29 +1,28 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+# api/tags.py
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session as OrmSession
 from typing import List
-import csv
-import os
+from pydantic import BaseModel
+from api.db import Session as DBSession, Tag as TagModel
 
 router = APIRouter()
 
-class Tag(BaseModel):
+class TagOut(BaseModel):
     userId: int
     movieId: int
     tag: str
-    timestamp: int  # zmieniłem na int, bo w pliku jest liczba
+    timestamp: int
 
-def read_tags():
-    tags = []
-    csv_path = os.path.join(os.path.dirname(__file__), "data/tags.csv")
-    with open(csv_path, encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            row["userId"] = int(row["userId"])
-            row["movieId"] = int(row["movieId"])
-            row["timestamp"] = int(row["timestamp"])
-            tags.append(Tag(**row))
-    return tags
+    class Config:
+        orm_mode = True
 
-@router.get("/tags", response_model=List[Tag])
-def get_tags():
-    return read_tags()
+def get_db():
+    db = DBSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.get("/tags", response_model=List[TagOut])
+def get_tags(db: OrmSession = Depends(get_db)):
+    return db.query(TagModel).all()

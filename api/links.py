@@ -1,28 +1,27 @@
-from fastapi import APIRouter
+# api/links.py
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session as OrmSession
+from typing import List, Optional
 from pydantic import BaseModel
-from typing import List
-import csv
-import os
+from api.db import Session as DBSession, Link as LinkModel
 
 router = APIRouter()
 
-class Link(BaseModel):
+class LinkOut(BaseModel):
     movieId: int
-    imdbId: str
-    tmdbId: str
+    imdbId: Optional[str] = None
+    tmdbId: Optional[str] = None
 
-def read_links():
-    links = []
-    # Ścieżka względna do pliku CSV
-    csv_path = os.path.join(os.path.dirname(__file__), "data/links.csv")
-    with open(csv_path, encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            # Zamiana movieId na int, bo z CSV przychodzi jako string
-            row["movieId"] = int(row["movieId"])
-            links.append(Link(**row))
-    return links
+    class Config:
+        orm_mode = True
 
-@router.get("/links", response_model=List[Link])
-def get_links():
-    return read_links()
+def get_db():
+    db = DBSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.get("/links", response_model=List[LinkOut])
+def get_links(db: OrmSession = Depends(get_db)):
+    return db.query(LinkModel).all()
