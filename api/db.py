@@ -8,6 +8,9 @@ from typing import Iterable, Optional
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session as OrmSession
 
+# + hash do haseł
+from jwt.crypto import hash_password
+
 # === ŚCIEŻKI / ENGINE / SESSION ===
 
 Base = declarative_base()
@@ -17,25 +20,28 @@ DB_PATH: Path = BASE_DIR / "movies.db"
 
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},  # FastAPI by default używa wielu wątków
+    connect_args={"check_same_thread": False},
     future=True,
 )
-# nazwa pozostaje "Session", żeby import w movies.py (DBSession) działał bez zmian
 Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
+# === MODELE ===
 
-# === MODELE ORM ===
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    username = Column(String(64), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    roles = Column(String(255), nullable=False, default="")  # CSV, np. "ROLE_ADMIN,ROLE_USER"
 
 class Movie(Base):
     __tablename__ = "movies"
     movieId = Column(Integer, primary_key=True)
     title = Column(String, nullable=False)
     genres = Column(String, nullable=False)
-    # Relacje
     links = relationship("Link", back_populates="movie", uselist=False, cascade="all, delete-orphan")
     ratings = relationship("Rating", back_populates="movie", cascade="all, delete-orphan")
     tags = relationship("Tag", back_populates="movie", cascade="all, delete-orphan")
-
 
 class Link(Base):
     __tablename__ = "links"
@@ -43,7 +49,6 @@ class Link(Base):
     imdbId = Column(String)
     tmdbId = Column(String)
     movie = relationship("Movie", back_populates="links")
-
 
 class Rating(Base):
     __tablename__ = "ratings"
@@ -54,7 +59,6 @@ class Rating(Base):
     timestamp = Column(Integer, nullable=False)
     movie = relationship("Movie", back_populates="ratings")
 
-
 class Tag(Base):
     __tablename__ = "tags"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -64,10 +68,8 @@ class Tag(Base):
     timestamp = Column(Integer, nullable=False)
     movie = relationship("Movie", back_populates="tags")
 
-
-# Utworzenie tabel (jeśli nie istnieją)
+# utworzenie tabel
 Base.metadata.create_all(engine)
-
 
 # === FUNKCJE ŁADUJĄCE DANE Z CSV ===
 
@@ -77,6 +79,19 @@ def _open_csv(csv_path: Path) -> Iterable[dict]:
         for row in reader:
             yield row
 
+def load_users(session: OrmSession, csv_path: Path) -> None:
+    for row in _open_csv(csv_path):
+        username = row["username"].strip()
+        password = row["password"]
+        roles = (row.get("roles") or "").strip()
+        session.add(
+            User(
+                username=username,
+                password_hash=hash_password(password),
+                roles=roles,
+            )
+        )
+    session.commit()
 
 def load_movies(session: OrmSession, csv_path: Path) -> None:
     for row in _open_csv(csv_path):
@@ -89,7 +104,6 @@ def load_movies(session: OrmSession, csv_path: Path) -> None:
         )
     session.commit()
 
-
 def load_links(session: OrmSession, csv_path: Path) -> None:
     for row in _open_csv(csv_path):
         session.add(
@@ -100,7 +114,6 @@ def load_links(session: OrmSession, csv_path: Path) -> None:
             )
         )
     session.commit()
-
 
 def load_ratings(session: OrmSession, csv_path: Path) -> None:
     for row in _open_csv(csv_path):
@@ -114,7 +127,6 @@ def load_ratings(session: OrmSession, csv_path: Path) -> None:
         )
     session.commit()
 
-
 def load_tags(session: OrmSession, csv_path: Path) -> None:
     for row in _open_csv(csv_path):
         session.add(
@@ -127,36 +139,16 @@ def load_tags(session: OrmSession, csv_path: Path) -> None:
         )
     session.commit()
 
-
 # === SEED / NARZĘDZIA ===
 
+def is_users_table_empty(session: OrmSession) -> bool:
+    return session.query(User.id).first() is None
+
 def is_movies_table_empty(session: OrmSession) -> bool:
-    # szybkie sprawdzenie — wystarczy pierwszy rekord
     return session.query(Movie.movieId).first() is None
 
-
 def seed_from_csvs(session: OrmSession, data_dir: Path) -> None:
-    """
-    Ładuje dane z CSV w katalogu `data_dir` w kolejności:
-    movies.csv -> links.csv -> ratings.csv -> tags.csv
-    Zakłada standardowy format MovieLens.
-    """
     load_movies(session, data_dir / "movies.csv")
     load_links(session, data_dir / "links.csv")
     load_ratings(session, data_dir / "ratings.csv")
     load_tags(session, data_dir / "tags.csv")
-
-
-# === Tryb standalone (jednorazowe zasianie bazy) ===
-
-if __name__ == "__main__":
-    data_dir = BASE_DIR / "data"
-    if not data_dir.exists():
-        raise SystemExit(f"Brak katalogu z danymi: {data_dir}")
-
-    with Session() as s:
-        if is_movies_table_empty(s):
-            seed_from_csvs(s, data_dir)
-            print(f"[OK] Załadowano dane z {data_dir} do {DB_PATH}")
-        else:
-            print("[INFO] Tabela movies nie jest pusta — pomijam seed.")

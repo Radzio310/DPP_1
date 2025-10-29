@@ -5,7 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from api.db import Session as DBSession, Link as LinkModel
 
-router = APIRouter()
+router = APIRouter(tags=["Movies"])
 
 class LinkOut(BaseModel):
     movieId: int

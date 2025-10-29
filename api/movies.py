@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from api.db import Session as DBSession, Movie
 from typing import List
 
-router = APIRouter()
+router = APIRouter(tags=["Movies"])
 
 # Schemat odpowiedzi (opcjonalnie, dla lepszej dokumentacji)
 from pydantic import BaseModel

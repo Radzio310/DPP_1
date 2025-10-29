@@ -5,7 +5,7 @@ from typing import List
 from pydantic import BaseModel
 from api.db import Session as DBSession, Tag as TagModel
 
-router = APIRouter()
+router = APIRouter(tags=["Movies"])
 
 class TagOut(BaseModel):
     userId: int
