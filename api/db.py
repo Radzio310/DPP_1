@@ -1,6 +1,7 @@
 # api/db.py
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import csv
 from typing import Iterable, Optional
@@ -16,13 +17,18 @@ from jwt.crypto import hash_password
 Base = declarative_base()
 
 BASE_DIR: Path = Path(__file__).resolve().parent
-DB_PATH: Path = BASE_DIR / "movies.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(
-    f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
-    future=True,
-)
+if DATABASE_URL:
+    connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+    engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
+else:
+    DB_PATH: Path = BASE_DIR / "movies.db"
+    engine = create_engine(
+        f"sqlite:///{DB_PATH}",
+        connect_args={"check_same_thread": False},
+        future=True,
+    )
 Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 # === MODELE ===
